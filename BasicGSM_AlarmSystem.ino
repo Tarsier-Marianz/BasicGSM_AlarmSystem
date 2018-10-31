@@ -71,9 +71,9 @@ void setup() {
 
   if (phoneConnected) {
     //Enable this two lines if you want to send an SMS.
-    if (sms.SendSMS(DEFAULT_PHONE, "Arduino SMS")){
+    if (sms.SendSMS(DEFAULT_PHONE, "Arduino SMS")) {
       Serial.println("\nSMS sent OK");
-	}
+    }
   }
 };
 
@@ -93,12 +93,12 @@ void loop() {
         delay(100);
       }
     }
-	
+
     if (waterSensorsState) {
       detectWaterSensors();
     }
-	
-	detectMotionSensor();
+
+    detectMotionSensor();
   }
 };
 
@@ -136,7 +136,7 @@ void validateCommand(char* message) {
   } else if (isCommandEqual (cmd, WATER_OFF)) {
     waterSensorsState = false;
     sendAlert("Water sensors Turned OFF");
-  }else if (isCommandEqual (cmd, BEEP_ON)) {
+  } else if (isCommandEqual (cmd, BEEP_ON)) {
     beepSoundState = true;
     sendAlert("Beeping sound enabled");
   } else if (isCommandEqual (cmd, BEEP_OFF)) {
@@ -169,24 +169,24 @@ void detectMotionSensor() {
   const byte numberOfSamples = 100;
   const byte thresholdPercentage = 80;
   if (sensorHasValue(PIR_SENSOR, HIGH, numberOfSamples, thresholdPercentage)) {
-	
-	digitalWrite(PIN_CAMERA, HIGH); // trigger camera to capture
-	if(beepSoundState){
-	   generateBeepSound ();
-	}
+
+    digitalWrite(PIN_CAMERA, HIGH); // trigger camera to capture
+    if (beepSoundState) {
+      generateBeepSound ();
+    }
     sendAlert("Motion detected");
-  }else{
-	digitalWrite(PIN_CAMERA, LOW);
+  } else {
+    digitalWrite(PIN_CAMERA, LOW);
   }
 }
 
 void detectWaterSensors() {
   const byte numberOfSamples = 100;
   const byte thresholdPercentage = 80;
-  if (sensorHasValue(WATER_SENSOR1, LOW, numberOfSamples, thresholdPercentage)) {
+  if (sensorHasValue(WATER_SENSOR1, HIGH, numberOfSamples, thresholdPercentage)) {
     sendAlert("Water Sensor 1 report empty");
   }
-  if (sensorHasValue(WATER_SENSOR2, LOW, numberOfSamples, thresholdPercentage)) {
+  if (sensorHasValue(WATER_SENSOR2, HIGH, numberOfSamples, thresholdPercentage)) {
     sendAlert("Water Sensor 2 report empty");
   }
 }
