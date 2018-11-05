@@ -33,6 +33,7 @@ const char* BEEP_ON         = "B1";
 const char* OFF_DETECTION   = "M0";
 const char* ON_DETECTION    = "M1";
 const char* REGISTER_UNLI   = "REG#";
+const char* CURRENT_CONFIG  = "CFG";
 const char* INQUIRE_BALANCE = "BAL";
 const char* RESET_ARDUINO   = "RST";
 const char* SET_PHONENUMBER = "SET#";
@@ -72,8 +73,6 @@ char sms_buffer[160];	// array that holds message content
 char phone_number[20]; // array for the phone number string
 
 void setup() {
-
-
   initPins();
   Serial.begin(9600);
 
@@ -119,6 +118,20 @@ void loop() {
   }
 };
 
+void sendDefaultConfiguration() {
+  String configs = "STATES";
+  configs += ("\n  N: " + notifyState);
+  configs += (",  WS: " + waterSensorsState);
+  configs += (",  B: " + beepSoundState);
+  configs += (",  M: " + motionState);
+  configs += ("\n  VALUES");
+  configs += (",  RECIP: " + String(DEFAULT_PHONE));
+  configs += (",  BAL: " + String(DEFAULT_BAL));
+  configs += (",  REG RECIP: " + String(DEFAULT_REG));
+  configs += (",  REG MSG: " + String(REGISTER_MSG));
+
+  sendAlert(configs.c_str());
+}
 
 void sendAlert(char* message) {
   if (notifyState) {
@@ -175,6 +188,8 @@ void validateCommand(char* message) {
   } else if (isCommandEqual (cmd, RESET_ARDUINO)) {
     sendAlert("Resetting Arduino...");
     resetFunc();
+  } else if (isCommandEqual (cmd, CURRENT_CONFIG)) {
+    sendDefaultConfiguration();
   } else if (contains (REGISTER_UNLI, cmd)) {
     String messageBuffer = String(cmd);
     messageBuffer.replace("REG#", "");
