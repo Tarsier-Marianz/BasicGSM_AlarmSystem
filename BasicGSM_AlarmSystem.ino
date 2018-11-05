@@ -8,6 +8,7 @@ SMSGSM sms;
 char* DEFAULT_PHONE       = "09565392933";
 char* DEFAULT_BAL         = "222";
 char* DEFAULT_REG         = "8080";
+char* REGISTER_MSG        = "GOUNLI20";
 
 const byte RETRIES        = 3;
 
@@ -31,8 +32,7 @@ const char* BEEP_OFF        = "B0";
 const char* BEEP_ON         = "B1";
 const char* OFF_DETECTION   = "M0";
 const char* ON_DETECTION    = "M1";
-const char* REGISTER_UNLI   = "REG";
-const char* REGISTER_MSG    = "GOUNLI20";
+const char* REGISTER_UNLI   = "REG#";
 const char* INQUIRE_BALANCE = "BAL";
 const char* RESET_ARDUINO   = "RST";
 const char* SET_PHONENUMBER = "SET#";
@@ -123,6 +123,9 @@ void loop() {
 void sendAlert(char* message) {
   if (notifyState) {
     if (phoneConnected) { //check if phone is connected
+      if (message == '\0') {
+        return; //if empty message;
+      }
       if (sms.SendSMS(DEFAULT_PHONE, message)) {
         Serial.print("Message sent: ");
         Serial.println(message);
@@ -165,18 +168,21 @@ void validateCommand(char* message) {
   } else if (isCommandEqual (cmd, NOTIF_OFF)) {
     sendAlert("Notification Turned OFF");
     notifyState = false;
-  } else if (isCommandEqual (cmd, REGISTER_UNLI)) {
-    if (sms.SendSMS(DEFAULT_REG, REGISTER_MSG)) {
-      sendAlert( REGISTER_MSG);
-      Serial.println("Registered Unli Promo");
-    }
-  } else if (isCommandEqual (cmd, INQUIRE_BALANCE)) {
+  }  else if (isCommandEqual (cmd, INQUIRE_BALANCE)) {
     if (sms.SendSMS(DEFAULT_BAL, INQUIRE_BALANCE)) {
       Serial.println("Inquire Balance");
     }
   } else if (isCommandEqual (cmd, RESET_ARDUINO)) {
     sendAlert("Resetting Arduino...");
     resetFunc();
+  } else if (contains (REGISTER_UNLI, cmd)) {
+    String messageBuffer = String(cmd);
+    messageBuffer.replace("REG#", "");
+    REGISTER_MSG = messageBuffer.c_str();
+    if (sms.SendSMS(DEFAULT_REG, REGISTER_MSG)) {
+      sendAlert( REGISTER_MSG);
+      Serial.println("Registered Unli Promo " + messageBuffer + " ...");
+    }
   } else if (contains( SET_PHONENUMBER, cmd) ) {
     setPhoneNumber(cmd);
     String commandString = "SET NUMBER:";
@@ -300,13 +306,15 @@ int find_text(String needle, String haystack) {
 
 boolean isValidNumber(String str) {
   for (char i = 0; i < str.length(); i++) {
-    if ( !(isDigit(str.charAt(i)))) {
-      return false;
+    char c = str.charAt(i);
+    if (c != '\0') {
+      if ( !(isDigit(c))) {
+        return false;
+      }
     }
   }
   return true;
 }
-
 /* Section for Phone number configuration */
 void setPhoneNumber(char * commandStr) {
   String messageBuffer = String(commandStr);
@@ -328,7 +336,10 @@ void readEEPROM() {
   for (int i = 0 ; i < phoneNumberLength ; i++) {   // to make it safe we limit out writing addresses
     byte byteValue = EEPROM.read(i);            //read EEPROM data at address i
     //Serial.write(byteValue);                    // show byte in ASCII mode, use "write" command not "print"
-    eepromPhoneNumber += (char)byteValue;
+    char c = (char)byteValue;
+    if (c != '\0') {
+      eepromPhoneNumber += c;
+    }
   }
   if (isValidNumber(eepromPhoneNumber)) {
     DEFAULT_PHONE = eepromPhoneNumber.c_str();
