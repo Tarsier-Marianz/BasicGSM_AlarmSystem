@@ -1,6 +1,6 @@
 #include "SIM900.h"
-#include <SoftwareSerial.h>
 #include "sms.h"
+#include <SoftwareSerial.h>
 #include <EEPROM.h>
 
 SMSGSM sms;
@@ -39,6 +39,7 @@ const char* RESET_ARDUINO   = "RST";
 const char* SET_PHONENUMBER = "SET#";
 const char* GET_PHONENUMBER = "GET#";
 const char* RECEIVE_BALANCE = "Yourloadbalance";
+const char* RECEIVE_BALANCE2 = "Your load balance";
 const char* INVALID_KEYWORD = "youhaveenteredaninvalidkeyword";
 
 /* Non constant variables */
@@ -51,8 +52,9 @@ boolean beepSoundState    = false;
 /* variables in handling EEPROM
     holds phone number configuration
 */
-int phoneNumberLength   = 12;                 // maximum index/address where to write
-int address         = 0;                  //EEPROM address counter
+int phoneNumberLength     = 12;                 // maximum index/address where to write
+int phoneStartAddress     = 0;                  //EEPROM address counter
+int notifStartAddress     = 13;                 //EEPROM address counter save notification
 String eepromPhoneNumber, eepromContent;
 
 void(* resetFunc) (void) = 0;             // declaring reset function to be able reset programatically
@@ -84,8 +86,9 @@ void setup() {
   else Serial.println("\nstatus=IDLE");
 
   if (phoneConnected) {
-    readEEPROM(); //call method to retrieve saved phone number
-
+    readPhoneNumberEEPROM(); //call method to retrieve saved phone number
+    notifyState = EEPROM.read(notifStartAddress);            //read saved Notification state from EEPROM
+    Serial.println(notifyState);
     if (sms.SendSMS(DEFAULT_PHONE, "Arduino SMS")) {
       Serial.println("\nSMS sent OK");
     }
@@ -93,19 +96,23 @@ void setup() {
 };
 
 void loop() {
-  memset(sms_buffer, 0, sizeof(sms_buffer));
+  memset(sms_buffer, 0, sizeof(sms_buffer));    // clear array that holds message receive
+  memset(phone_number, 0, sizeof(phone_number));// clear array that holds sender number
+
   if (phoneConnected) {
     for (int index = 1; index < 100; index++) {
       if (sms.GetSMS(index, phone_number, sms_buffer, 160)) {
-        Serial.print(index);
-        Serial.print("  : ");
-        Serial.print(phone_number);
-        Serial.print("  : ");
-        Serial.println(sms_buffer);
-        if (sms.DeleteSMS(index)) {
-          validateCommand(sms_buffer);
+        if (sms_buffer != '\0') {
+          Serial.print(index);
+          Serial.print("  : ");
+          Serial.print(phone_number);
+          Serial.print("  : ");
+          Serial.println(sms_buffer);
+          if (sms.DeleteSMS(index)) {
+            validateCommand(sms_buffer);
+          }
+          delay(100);
         }
-        delay(100);
       }
     }
 
@@ -148,7 +155,13 @@ void sendAlert(char* message) {
 }
 
 void validateCommand(char* message) {
+  if (strlen(message) <= 0) {
+    Serial.println("Empty command!");
+    return;
+  }
+  //char *cmd = message;
   char *cmd = trimCommand(message);
+
   if (isCommandEqual (cmd, LED_ON)) {
     digitalWrite(PIN_LIGHT, HIGH);
     digitalWrite(PIN_LED, HIGH);
@@ -177,8 +190,10 @@ void validateCommand(char* message) {
     sendAlert("Beeping sound disabled");
   } else if (isCommandEqual (cmd, NOTIF_ON)) {
     notifyState = true;
+    EEPROM.write(notifStartAddress, 1);
     sendAlert("Notification Turned ON");
   } else if (isCommandEqual (cmd, NOTIF_OFF)) {
+    EEPROM.write(notifStartAddress, 0);
     sendAlert("Notification Turned OFF");
     notifyState = false;
   }  else if (isCommandEqual (cmd, INQUIRE_BALANCE)) {
@@ -204,16 +219,24 @@ void validateCommand(char* message) {
     commandString += eepromPhoneNumber;
     sendAlert(commandString.c_str());
   } else if (contains( GET_PHONENUMBER, cmd) ) {
-    readEEPROM();
+    readPhoneNumberEEPROM();
     String commandString = "GET NUMBER:";
     commandString += eepromPhoneNumber;
     sendAlert(commandString.c_str());
   } else if (contains( RECEIVE_BALANCE, cmd) ) {
     sendAlert( sms_buffer);
+  } else if (contains( RECEIVE_BALANCE2, cmd) ) {
+    sendAlert( message);
   } else if (contains( INVALID_KEYWORD, cmd)) {
     sendAlert( REGISTER_MSG);
   } else {
-    sendAlert("Invalid command:");
+    String commandString = "Invalid command:";
+    if (cmd == '\0') {
+      commandString += message;
+    } else {
+      commandString += cmd;
+    }
+    sendAlert(commandString.c_str());
     Serial.print("Invalid command:");
     Serial.println(cmd);
   }
@@ -288,13 +311,18 @@ byte isCommandEqual(char *cmd, char *expected_str) {
 
 char* trimCommand(char* commandStr) {
   int i, j;
+  char lastChar;
   char *output = commandStr;
   for (i = 0, j = 0; i < strlen(commandStr); i++, j++) {
-    if (commandStr[i] != ' ')  {
-      output[j] = commandStr[i];
+    char c = commandStr[i];
+    if (c != ' ')  {
+      output[j] = c;
     } else {
-      j--;
+      if (lastChar == ' ')  {
+        j--;
+      }
     }
+    lastChar = c;
   }
   output[j] = 0;
   return output;
@@ -338,19 +366,18 @@ void setPhoneNumber(char * commandStr) {
   eepromPhoneNumber = messageBuffer;
   for (int c = 0; c < phoneNumberLength; c++) {             // extract all chars in entered string
     byte byteValue = eepromPhoneNumber[c];
-    writeEEPROM(byteValue);
+    writePhoneNumberEEPROM(byteValue);
   }
   Serial.println();
   Serial.print(eepromPhoneNumber);
   Serial.println(" successfully saved!");
 }
 
-void readEEPROM() {
+void readPhoneNumberEEPROM() {
   eepromPhoneNumber = "";
   //for (int i = 0 ; i < EEPROM.length() ; i++) {
-  for (int i = 0 ; i < phoneNumberLength ; i++) {   // to make it safe we limit out writing addresses
+  for (int i = phoneStartAddress ; i < phoneNumberLength ; i++) {   // to make it safe we limit out writing addresses
     byte byteValue = EEPROM.read(i);            //read EEPROM data at address i
-    //Serial.write(byteValue);                    // show byte in ASCII mode, use "write" command not "print"
     char c = (char)byteValue;
     if (c != '\0') {
       eepromPhoneNumber += c;
@@ -366,23 +393,24 @@ void readEEPROM() {
   }
 }
 
-void clearEEPROM() {
+void clearPhoneNumberEEPROM() {
   //for (int i = 0 ; i < EEPROM.length() ; i++) {
-  for (int i = 0 ; i < phoneNumberLength ; i++) {   // to be safe, we clear only the given addressLength (10 in my sample)
+  for (int i = phoneStartAddress ; i < phoneNumberLength ; i++) {   // to be safe, we clear only the given addressLength (10 in my sample)
     if (EEPROM.read(i) != 0) {                  //skip already "empty" addresses
       EEPROM.write(i, 0);                       //write 0 to address i
     }
   }
-  address = 0;                                  //reset address counter
+  phoneStartAddress = 0;                                  //reset address counter
   //Serial.println();
   //Serial.println("EEPROM cleared!");
 }
 
-void writeEEPROM(byte value) {
-  EEPROM.write(address, value);                 //write value to current address counter address
-  address++;                                    //increment address counter
-  //if (address == EEPROM.length()) {           //check if address counter has reached the end of EEPROM
-  if (address == phoneNumberLength) {               // to make it safe we limit out writing addresses
-    address = 0;                                //if yes: reset address counter
+void writePhoneNumberEEPROM(byte value) {
+  EEPROM.write(phoneStartAddress, value);                 //write value to current address counter address
+  phoneStartAddress++;                                    //increment address counter
+  //if (phoneStartAddress == EEPROM.length()) {           //check if address counter has reached the end of EEPROM
+  if (phoneStartAddress == phoneNumberLength) {               // to make it safe we limit out writing addresses
+    phoneStartAddress = 0;                                //if yes: reset address counter
   }
 }
+
