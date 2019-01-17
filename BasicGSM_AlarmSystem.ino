@@ -5,7 +5,7 @@
 
 SMSGSM sms;
 
-char* DEFAULT_PHONE       = "09565392933";
+char* DEFAULT_PHONE       = "09565392???";
 char* DEFAULT_BAL         = "222";
 char* DEFAULT_REG         = "8080";
 char* REGISTER_MSG        = "GOUNLI20";
