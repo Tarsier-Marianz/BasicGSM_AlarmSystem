@@ -49,6 +49,8 @@ boolean waterSensorsState = false;
 boolean notifyState       = false;
 boolean beepSoundState    = false;
 
+boolean sendInvalidCMD    = false;
+
 /* variables in handling EEPROM
     holds phone number configuration
 */
@@ -231,14 +233,15 @@ void validateCommand(char* message) {
     sendAlert( REGISTER_MSG);
   } else {
     String commandString = "Invalid command:";
-    if (cmd == '\0') {
-      commandString += message;
-    } else {
-      commandString += cmd;
+    if (sendInvalidCMD) { //check if sending invalid command is allowed
+      if (cmd == '\0') {
+        commandString += message;
+      } else {
+        commandString += cmd;
+      }
+      sendAlert(commandString.c_str());
     }
-    sendAlert(commandString.c_str());
-    Serial.print("Invalid command:");
-    Serial.println(cmd);
+    Serial.println(commandString);
   }
 }
 
